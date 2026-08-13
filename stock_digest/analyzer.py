@@ -19,7 +19,7 @@ from stock_digest.scoring import (
     score_sentiment,
     score_valuation,
 )
-from stock_digest.sentiment_engine import aggregate as aggregate_sentiment
+from stock_digest import sentiment_engine
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ class StockAnalyzer:
         self.fetcher = DataFetcher()
         self.weights = weights or DEFAULT_WEIGHTS.copy()
 
-    def analyze(self, ticker: str, include_peers: bool = True) -> Dict:
+    def analyze(self, ticker: str, include_peers: bool = True, sentiment_mode: str = "vader") -> Dict:
         ticker = ticker.upper()
         info = self.fetcher.get_info(ticker)
         fundamentals_raw = self.fetcher.get_fundamentals(ticker)
@@ -58,7 +58,7 @@ class StockAnalyzer:
         fcf_metrics = extract_fundamentals(fundamentals_raw)
         valuation = extract_valuation(info, fcf_metrics.get("fcf", 0), price=price, shares=shares)
         momentum = extract_momentum(prices)
-        sentiment = aggregate_sentiment(news)
+        sentiment = sentiment_engine.analyze(news, mode=sentiment_mode)
 
         # Peer comparison
         sector = info.get("sector", "")
@@ -192,10 +192,10 @@ class StockAnalyzer:
         if f.get("earnings_consistency", 0) > 0.5:
             analysis["watch"].append("Earnings have been inconsistent")
 
-    def analyze_tickers(self, tickers: List[str], max_workers: int = 4) -> List[Dict]:
+    def analyze_tickers(self, tickers: List[str], max_workers: int = 4, sentiment_mode: str = "vader") -> List[Dict]:
         results = []
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_ticker = {executor.submit(self.analyze, t): t for t in tickers}
+            future_to_ticker = {executor.submit(self.analyze, t, True, sentiment_mode): t for t in tickers}
             for future in as_completed(future_to_ticker):
                 try:
                     results.append(future.result())

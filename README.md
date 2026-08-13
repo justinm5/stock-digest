@@ -1,6 +1,8 @@
 # Stock Digest
 
-A simple, comprehensive stock analyzer for retail investors. It scores stocks across **fundamentals, valuation, momentum, financial health, and sentiment** — then tells you why or why not to buy with green, yellow, and red bullets.
+One app for retail investors. It scores stocks across **fundamentals, valuation, momentum, financial health, and sentiment**, then gives you a single 0–100 score with green (+), yellow (~), and red (-) bullets explaining why or why not to buy.
+
+It also includes a **Quick Screener**, a **GRU sentiment model trainer**, and a **backtester**.
 
 ## What it scores
 
@@ -32,16 +34,14 @@ A simple, comprehensive stock analyzer for retail investors. It scores stocks ac
 
 ### Sentiment
 - Latest headlines from Finnhub + NewsAPI
-- VADER sentiment scoring
+- VADER sentiment (fast)
+- Optional 256-unit GRU model (trained on 30,599 headlines)
 
-## How it works
+## Data sources
 
-1. Fetches data from **Yahoo Finance** (fundamentals, prices) and **Finnhub** (real-time quotes, peers, news).
-2. Computes metrics and compares them against peers in the same sector.
-3. Scores each category 0–100.
-4. Combines categories into a final 0–100 score using adjustable weights.
-5. Generates **green (+), yellow (~), and red (-)** bullets explaining the bullish and bearish case.
-6. **Backtests** the strategy against SPY using historical momentum signals.
+- **Yahoo Finance** — fundamentals, prices, valuation ratios
+- **Finnhub** — real-time quotes, peer comparison, company news
+- **NewsAPI** — breaking headlines from major outlets
 
 ## Quick start
 
@@ -53,7 +53,7 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Add your free API keys to `.env`:
+Add free API keys to `.env`:
 - **Finnhub**: https://finnhub.io/register
 - **NewsAPI**: https://newsapi.org/register
 
@@ -63,17 +63,33 @@ Add your free API keys to `.env`:
 streamlit run app.py
 ```
 
+It opens at `http://localhost:8501` with four tabs:
+- **Quick Screener** — fast sentiment + momentum buy/watch/avoid signals
+- **Deep Digest** — full fundamental + valuation + momentum + health + sentiment scoring
+- **Train Model** — generate 30,599 headlines and train the 256-unit GRU model
+- **Backtest** — test the strategy against SPY
+
 ### Run from the command line
 
 ```bash
-python cli.py --tickers AAPL MSFT TSLA NVDA META
+# Deep analysis
+python cli.py --tickers AAPL MSFT TSLA NVDA META --mode deep
+
+# Quick screener
+python cli.py --tickers AAPL MSFT TSLA NVDA META --mode quick
+
+# Backtest
+python cli.py --tickers AAPL MSFT TSLA NVDA META --mode backtest --start 2022-01-01 --top-n 5
 ```
 
-### Run a backtest
+### Train the GRU model
 
 ```bash
-python cli.py --tickers AAPL MSFT TSLA NVDA META AMZN GOOGL --backtest --start 2022-01-01 --top-n 5
+python -m stock_digest.gru.build_dataset
+python -m stock_digest.gru.train
 ```
+
+Then switch the sentiment engine to `gru` in the app tabs.
 
 ## Project structure
 
@@ -81,21 +97,30 @@ python cli.py --tickers AAPL MSFT TSLA NVDA META AMZN GOOGL --backtest --start 2
 stock-digest/
 ├── stock_digest/
 │   ├── __init__.py
-│   ├── analyzer.py       # Main scoring orchestrator
-│   ├── backtest.py       # Historical backtest engine
-│   ├── config.py         # API keys, weights, peer maps
-│   ├── data_fetcher.py   # Yahoo + Finnhub + NewsAPI
-│   ├── metrics.py        # Compute fundamentals / valuation / momentum
-│   ├── scoring.py        # 0-100 scoring and peer comparison
-│   └── sentiment_engine.py # VADER sentiment
-├── app.py                # Streamlit UI
-├── cli.py                # Command-line tool
+│   ├── analyzer.py          # Main deep analysis orchestrator
+│   ├── backtest.py          # Historical backtest engine
+│   ├── config.py            # API keys, weights, peer maps
+│   ├── data_fetcher.py      # Yahoo + Finnhub + NewsAPI
+│   ├── metrics.py           # Compute fundamentals / valuation / momentum
+│   ├── quick_screener.py    # Fast sentiment + momentum screener
+│   ├── scoring.py           # 0-100 scoring and peer comparison
+│   ├── sentiment_engine.py  # VADER + optional GRU
+│   └── gru/                 # GRU training and inference
+│       ├── build_dataset.py
+│       ├── train.py
+│       ├── model.py
+│       ├── scraper.py
+│       └── recommender.py
+├── app.py                   # Unified Streamlit UI
+├── cli.py                   # Command-line interface
+├── data/
+├── models/
 ├── requirements.txt
 ├── .env.example
 └── README.md
 ```
 
-## Understanding the score
+## Score legend
 
 | Score | Color | Signal |
 |---|---|---|
@@ -103,19 +128,10 @@ stock-digest/
 | 40–69 | Yellow | Mixed / watch |
 | 0–39 | Red | Unfavorable setup |
 
-The final score is a weighted average:
-- Fundamentals: 25%
-- Valuation: 20%
-- Momentum: 20%
-- Financial Health: 20%
-- Sentiment: 15%
-
-## Backtest
-
-The built-in backtest walks through historical prices and rebalances monthly into the top-N ranked stocks by momentum. It compares the portfolio to **SPY** buy-and-hold and reports total return, max drawdown, and Sharpe ratio.
+Weights are adjustable in the Streamlit sidebar.
 
 ## Notes
 
-- Free API tiers are rate-limited (Finnhub ~60 calls/min, NewsAPI ~100 requests/day).
+- Free API tiers are rate-limited. Finnhub ~60 calls/min; NewsAPI ~100 requests/day.
 - Valuation and fundamental scores are relative to peers when peer data is available.
-- This is a research and educational tool, not financial advice.
+- This is a research and educational tool, not investment advice.

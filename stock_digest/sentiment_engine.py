@@ -1,11 +1,14 @@
-"""News sentiment using VADER."""
+"""News sentiment using VADER (fast) or trained GRU model (deep)."""
+import numpy as np
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
-_analyzer = SentimentIntensityAnalyzer()
+from stock_digest.gru.model import GRUSentimentModel, gru_model_available
+
+_vader = SentimentIntensityAnalyzer()
 
 
-def score_text(text: str) -> dict:
-    scores = _analyzer.polarity_scores(text)
+def _vader_score_text(text: str) -> dict:
+    scores = _vader.polarity_scores(text)
     compound = scores["compound"]
     if compound >= 0.05:
         label = "positive"
@@ -22,11 +25,12 @@ def score_text(text: str) -> dict:
     }
 
 
-def aggregate(headlines: list) -> dict:
+def _vader_aggregate(headlines: list) -> dict:
     if not headlines:
         return {"label": "neutral", "compound": 0.0, "confidence": 0.0, "headlines_scored": 0}
 
-    results = [score_text(h["title"]) for h in headlines]
+    titles = [h["title"] if isinstance(h, dict) else h for h in headlines]
+    results = [_vader_score_text(t) for t in titles]
     avg_compound = sum(r["compound"] for r in results) / len(results)
     pos = sum(1 for r in results if r["label"] == "positive")
     neg = sum(1 for r in results if r["label"] == "negative")
@@ -52,3 +56,14 @@ def aggregate(headlines: list) -> dict:
         "neutral_count": neu,
         "headlines_scored": len(results),
     }
+
+
+def analyze(headlines: list, mode: str = "vader") -> dict:
+    """
+    Analyze sentiment of a list of headline dicts or strings.
+    mode: 'vader' (fast, no model needed) or 'gru' (trained model).
+    """
+    if mode == "gru" and gru_model_available():
+        titles = [h["title"] if isinstance(h, dict) else h for h in headlines]
+        return GRUSentimentModel().aggregate(titles)
+    return _vader_aggregate(headlines)
