@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+ENV/
+env/
+.env
+*.log
+*.csv
+*.keras
+*.h5
+*.pkl
+.ipynb_checkpoints/
+.DS_Store
+Thumbs.db
